@@ -2,20 +2,41 @@ version: "3"
 services:
 
   # Generate fake traces...
-  synthetic-load-generator:
-    image: omnition/synthetic-load-generator:1.0.25
-    volumes:
-      - ../shared/load-generator.json:/etc/load-generator.json
+  # synthetic-load-generator:
+  #   image: omnition/synthetic-load-generator:1.0.25
+  #   volumes:
+  #     - ../shared/load-generator.json:/etc/load-generator.json
+  #   environment:
+  #     - TOPOLOGY_FILE=/etc/load-generator.json
+  #     - JAEGER_COLLECTOR_URL=http://otel-collector:14268
+  itchysats-testnet:
+    image: ghcr.io/itchysats/itchysats/taker:master
+    restart: on-failure
     environment:
-      - TOPOLOGY_FILE=/etc/load-generator.json
-      - JAEGER_COLLECTOR_URL=http://otel-collector:14268
+      - RUST_LOG="opentelemetry"
+    ports:
+      - 8000:8000
+    volumes:
+      - ./data:/data
+    command: |
+      --log-level=Debug
+      --instrumentation
+      --collector-endpoint="http://otel-collector:4317"
+      testnet
 
   # And put them in an OTEL collector pipeline...
   otel-collector:
-    image: otel/opentelemetry-collector:0.32.0
+    image: otel/opentelemetry-collector:latest
     command: [ "--config=/etc/otel-collector.yaml" ]
     volumes:
       - ./otel-collector.yaml:/etc/otel-collector.yaml
+    ports:
+      - "4317"  # otlp grpc
+
+  otel-collector-dev:
+    image: otel/opentelemetry-collector-dev:latest
+    ports:
+      - "4317"  # otlp grpc
 
   # To eventually offload to Tempo...
   tempo:
