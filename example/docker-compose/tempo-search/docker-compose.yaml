@@ -2,15 +2,15 @@ version: "3"
 services:
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:1.4.1
     command: [ "-search.enabled=true", "-config.file=/etc/tempo.yaml" ]
     volumes:
       - ./tempo.yaml:/etc/tempo.yaml
       - ./overrides.yaml:/etc/overrides.yaml
-      - ./tempo-data/:/tmp/tempo
     ports:
       - "3200:3200"   # tempo
       - "14268"  # jaeger ingest
+      - "4317" # otlp gRPC ingest
 
 #  Commenting out because Grafana UI has search enabled. Uncomment if you want to use the Jaeger UI!
 #
@@ -24,15 +24,20 @@ services:
 #    depends_on:
 #      - tempo
 
-  synthetic-load-generator:
-    image: omnition/synthetic-load-generator:1.0.25
-    volumes:
-      - ../shared/load-generator.json:/etc/load-generator.json
+  itchysats-testnet:
+    image: ghcr.io/itchysats/itchysats/taker:master
+    restart: on-failure
     environment:
-      - TOPOLOGY_FILE=/etc/load-generator.json
-      - JAEGER_COLLECTOR_URL=http://tempo:14268
-    depends_on:
-      - tempo
+      - RUST_LOG="opentelemetry"
+    ports:
+      - 8000:8000
+    volumes:
+      - ./data:/data
+    command: |
+      --log-level=Debug
+      --instrumentation
+      --collector-endpoint="http://tempo:4317"
+      testnet
 
   prometheus:
     image: prom/prometheus:latest
@@ -43,7 +48,7 @@ services:
       - "9090:9090"
 
   grafana:
-    image: grafana/grafana:main   # track main as search is under active development
+    image: grafana/grafana:9.0.5   # track main as search is under active development
     volumes:
       - ./grafana.ini:/etc/grafana/grafana.ini
       - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
